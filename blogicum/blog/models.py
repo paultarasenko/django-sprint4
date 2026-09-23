@@ -1,20 +1,35 @@
 from django.contrib.auth import get_user_model
 from django.db import models
 
-from .constants import NAME_MAX_LENGTH, TITLE_MAX_LENGTH
+from .constants import (
+    COMMENT_PREVIEW_LENGTH, NAME_MAX_LENGTH, TITLE_MAX_LENGTH,
+)
 
 User = get_user_model()
 
 
-class PublishedModel(models.Model):
+class CreatedAtModel(models.Model):
+    """Отметка времени создания — нужна всем записям."""
+
+    created_at = models.DateTimeField(
+        auto_now_add=True,
+        verbose_name='Добавлено'
+    )
+
+    class Meta:
+        abstract = True
+
+
+class PublishedModel(CreatedAtModel):
+    """Отметка времени создания + признак публикации.
+
+    Нужна только тем записям, публикацию которых можно скрыть.
+    """
+
     is_published = models.BooleanField(
         default=True,
         verbose_name='Опубликовано',
         help_text='Снимите галочку, чтобы скрыть публикацию.'
-    )
-    created_at = models.DateTimeField(
-        auto_now_add=True,
-        verbose_name='Добавлено'
     )
 
     class Meta:
@@ -74,7 +89,7 @@ class Post(PublishedModel):
     )
     location = models.ForeignKey(
         Location, on_delete=models.SET_NULL, null=True, blank=True,
-        verbose_name='Местоположение',
+        verbose_name='Местоположение', related_name='posts',
     )
     category = models.ForeignKey(
         Category, on_delete=models.SET_NULL, null=True,
@@ -93,7 +108,7 @@ class Post(PublishedModel):
         return self.title
 
 
-class Comment(models.Model):
+class Comment(CreatedAtModel):
     post = models.ForeignKey(
         Post, on_delete=models.CASCADE, verbose_name='Публикация',
         related_name='comments',
@@ -103,9 +118,6 @@ class Comment(models.Model):
         related_name='comments',
     )
     text = models.TextField(verbose_name='Текст комментария')
-    created_at = models.DateTimeField(
-        auto_now_add=True, verbose_name='Дата и время комментария',
-    )
 
     class Meta:
         verbose_name = 'комментарий'
@@ -113,4 +125,4 @@ class Comment(models.Model):
         ordering = ('created_at',)
 
     def __str__(self):
-        return self.text[:20]
+        return self.text[:COMMENT_PREVIEW_LENGTH]

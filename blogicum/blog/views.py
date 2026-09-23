@@ -4,7 +4,6 @@ from django.contrib.auth.mixins import LoginRequiredMixin
 from django.db.models import Count
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
-from django.urls import reverse
 from django.utils import timezone
 from django.views.generic import (
     CreateView, DeleteView, ListView, UpdateView,
@@ -12,9 +11,10 @@ from django.views.generic import (
 
 from .constants import POSTS_BY_PAGE
 from .forms import CommentForm, PostForm
-from .mixins import OnlyAuthorMixin
+from .mixins import (
+    OnlyAuthorMixin, PostDetailRedirectMixin, ProfileRedirectMixin,
+)
 from .models import Category, Comment, Post
-from users.forms import ProfileEditForm
 
 User = get_user_model()
 
@@ -101,20 +101,6 @@ class ProfileListView(ListView):
         return context
 
 
-class ProfileUpdateView(LoginRequiredMixin, UpdateView):
-    model = User
-    form_class = ProfileEditForm
-    template_name = 'blog/user.html'
-
-    def get_object(self, queryset=None):
-        return self.request.user
-
-    def get_success_url(self):
-        return reverse(
-            'blog:profile', kwargs={'username': self.request.user.username}
-        )
-
-
 def get_visible_post_or_404(request, post_id):
     """Пост, видимый текущему пользователю.
 
@@ -141,7 +127,7 @@ def post_detail(request, post_id):
     return render(request, 'blog/detail.html', context)
 
 
-class PostCreateView(LoginRequiredMixin, CreateView):
+class PostCreateView(LoginRequiredMixin, ProfileRedirectMixin, CreateView):
     model = Post
     form_class = PostForm
     template_name = 'blog/create.html'
@@ -150,25 +136,15 @@ class PostCreateView(LoginRequiredMixin, CreateView):
         form.instance.author = self.request.user
         return super().form_valid(form)
 
-    def get_success_url(self):
-        return reverse(
-            'blog:profile', kwargs={'username': self.request.user.username}
-        )
 
-
-class PostUpdateView(OnlyAuthorMixin, UpdateView):
+class PostUpdateView(OnlyAuthorMixin, PostDetailRedirectMixin, UpdateView):
     model = Post
     form_class = PostForm
     template_name = 'blog/create.html'
     pk_url_kwarg = 'post_id'
 
-    def get_success_url(self):
-        return reverse(
-            'blog:post_detail', kwargs={'post_id': self.kwargs['post_id']}
-        )
 
-
-class PostDeleteView(OnlyAuthorMixin, DeleteView):
+class PostDeleteView(OnlyAuthorMixin, ProfileRedirectMixin, DeleteView):
     model = Post
     template_name = 'blog/create.html'
     pk_url_kwarg = 'post_id'
@@ -180,12 +156,6 @@ class PostDeleteView(OnlyAuthorMixin, DeleteView):
         context = super().get_context_data(**kwargs)
         context['form'] = PostForm(instance=self.object)
         return context
-
-    def get_success_url(self):
-        return reverse(
-            'blog:profile',
-            kwargs={'username': self.request.user.username},
-        )
 
 
 @login_required
@@ -206,30 +176,22 @@ def add_comment(request, post_id):
     return render(request, 'blog/detail.html', context)
 
 
-class CommentUpdateView(OnlyAuthorMixin, UpdateView):
+class CommentUpdateView(OnlyAuthorMixin, PostDetailRedirectMixin, UpdateView):
     model = Comment
     form_class = CommentForm
     template_name = 'blog/comment.html'
     pk_url_kwarg = 'comment_id'
 
     def get_queryset(self):
-        return Comment.objects.filter(post_id=self.kwargs['post_id'])
-
-    def get_success_url(self):
-        return reverse(
-            'blog:post_detail', kwargs={'post_id': self.kwargs['post_id']}
-        )
+        post = get_object_or_404(Post, pk=self.kwargs['post_id'])
+        return post.comments.all()
 
 
-class CommentDeleteView(OnlyAuthorMixin, DeleteView):
+class CommentDeleteView(OnlyAuthorMixin, PostDetailRedirectMixin, DeleteView):
     model = Comment
     template_name = 'blog/comment.html'
     pk_url_kwarg = 'comment_id'
 
     def get_queryset(self):
-        return Comment.objects.filter(post_id=self.kwargs['post_id'])
-
-    def get_success_url(self):
-        return reverse(
-            'blog:post_detail', kwargs={'post_id': self.kwargs['post_id']}
-        )
+        post = get_object_or_404(Post, pk=self.kwargs['post_id'])
+        return post.comments.all()

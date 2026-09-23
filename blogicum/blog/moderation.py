@@ -30,9 +30,10 @@ def get_toxicity_score(text: str) -> float:
     with torch.inference_mode():
         inputs = tokenizer(text, return_tensors='pt', truncation=True)
         proba = torch.sigmoid(model(**inputs).logits).numpy()[0]
-    # Первый класс модели — «not toxic»; итоговая токсичность —
-    # это дополнение вероятности «не токсичного» класса до единицы.
-    return 1 - proba[0]
+    # Первый класс модели — «not toxic», последний — «dangerous».
+    # Итоговая токсичность — это вероятность «не токсичного» класса,
+    # дополнительно уменьшенная на вероятность «опасного».
+    return 1 - proba[0] * (1 - proba[-1])
 
 
 def is_toxic(text: str) -> bool:
